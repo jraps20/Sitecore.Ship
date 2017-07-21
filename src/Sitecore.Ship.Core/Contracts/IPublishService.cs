@@ -7,6 +7,6 @@ namespace Sitecore.Ship.Core.Contracts
     {
         void Run(PublishParameters publishParameters);
         DateTime GetLastCompletedRun(PublishLastCompleted completeParameters);
-        void Run(ItemsToPublish itemsToPublish);
+        void Run(ItemsToPublish itemsToPublish, PublishParameters publishParameters);
     }
 }

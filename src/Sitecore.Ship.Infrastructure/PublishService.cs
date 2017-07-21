@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
 using Sitecore.Data;
 using Sitecore.Data.Managers;
 using Sitecore.Diagnostics;
 using Sitecore.Globalization;
-
+using Sitecore.Publishing;
+using Sitecore.Publishing.Pipelines.Publish;
 using Sitecore.Ship.Core.Contracts;
 using Sitecore.Ship.Core.Domain;
 
@@ -20,13 +20,13 @@ namespace Sitecore.Ship.Infrastructure
 		{
 			_publishingActions = new Dictionary<string, Func<Database, Database[], Language[], Handle>>
 				{
-					{ "full",           Publishing.PublishManager.Republish },
-					{ "smart",          Publishing.PublishManager.PublishSmart },
-					{ "incremental",    Publishing.PublishManager.PublishIncremental }
+					{ "full",           PublishManager.Republish },
+					{ "smart",          PublishManager.PublishSmart },
+					{ "incremental",    PublishManager.PublishIncremental }
 				};
 		}
 
-		public void Run(ItemsToPublish itemsToPublish)
+		public void Run(ItemsToPublish itemsToPublish, PublishParameters publishParameters)
 		{
 			if (itemsToPublish == null)
 			{
@@ -38,21 +38,43 @@ namespace Sitecore.Ship.Infrastructure
 				return;
 			}
 
-			using (new SecurityModel.SecurityDisabler())
-			{
-				var master = Sitecore.Configuration.Factory.GetDatabase("master");
-				var languages = itemsToPublish.TargetLanguages.Select(LanguageManager.GetLanguage).ToArray();
+            using (new SecurityModel.SecurityDisabler())
+            {
+                var master = Sitecore.Configuration.Factory.GetDatabase("master");
 
-				foreach (var itemToPublish in itemsToPublish.Items)
-				{
-					var item = master.GetItem(new ID(itemToPublish));
-					if (item != null)
-					{
-						Publishing.PublishManager.PublishItem(item, itemsToPublish.TargetDatabases.Select(Sitecore.Configuration.Factory.GetDatabase).ToArray(), languages, true, true);
-					}
-				}
-			}
-		}
+                foreach (var targetDatabase in itemsToPublish.TargetDatabases.Select(Sitecore.Configuration.Factory.GetDatabase))
+                {
+                    var publishOptions = new PublishOptions(
+                    master,
+                    targetDatabase,
+                    PublishMode.Full,
+                    publishParameters.Languages.Select(LanguageManager.GetLanguage).First(),
+                    DateTime.Now)
+                    {
+                        CompareRevisions = false, // default to false for list of items
+                        Deep = false // don't publish children for list of items
+                    };
+
+                    var context = PublishManager.CreatePublishContext(publishOptions);
+
+                    context.Languages = publishParameters.Languages.Select(LanguageManager.GetLanguage);
+
+                    var publishingCandidateList = (
+                        from itemIdToPublish
+                        in itemsToPublish.Items
+                            .Select(i => new ID(i))
+                        let item = master.GetItem(itemIdToPublish)
+                        where item != null
+                        select new PublishingCandidate(itemIdToPublish, "*", publishOptions));
+
+                    context.Queue.Add(publishingCandidateList);
+
+                    var queue = new ProcessQueue();
+
+                    queue.Process(context);
+                }
+            }
+        }
 
 		public void Run(PublishParameters publishParameters)
 		{
@@ -60,7 +82,7 @@ namespace Sitecore.Ship.Infrastructure
 
 			if (!_publishingActions.ContainsKey(publishingMode))
 			{
-				throw new InvalidOperationException(string.Format("Invalid publishing mode ({0})", publishingMode));
+				throw new InvalidOperationException($"Invalid publishing mode ({publishingMode})");
 			}
 
 			PublishingTask(_publishingActions[publishingMode], publishParameters);
