@@ -84,16 +84,8 @@ namespace Sitecore.Ship.Publish
 
             var now = DateTime.Now;
             var date = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second);
-
-            var publishParameters = new PublishParameters
-            {
-                Mode = publishRequest.Mode,
-                Source = publishRequest.Source ?? "master",
-                Targets = publishRequest.Targets.CsvStringToStringArray(new[] { "web" }),
-                Languages = publishRequest.Languages.CsvStringToStringArray(new[] { "en" }),
-            };
-
-            _publishService.Run(itemsToPublish, publishParameters);
+            
+            _publishService.Run(itemsToPublish);
 
             return Response.AsJson(date, HttpStatusCode.Accepted);
         }

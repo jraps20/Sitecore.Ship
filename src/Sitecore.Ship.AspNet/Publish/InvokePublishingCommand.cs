@@ -53,7 +53,7 @@ namespace Sitecore.Ship.AspNet.Publish
 							}
 							else
 							{
-								_publishService.Run(itemsToPublish, publishParameters);
+								_publishService.Run(itemsToPublish);
 								var json = Json.Encode(new { date });
 
 								JsonResponse(json, HttpStatusCode.Accepted, context);
